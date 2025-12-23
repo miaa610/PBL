@@ -2,7 +2,6 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { PBLComponentData, ComponentCategory, AppMode, Connection } from '../types';
 import { CanvasCard } from './CanvasCard';
-import { Circle, CheckCircle2 } from 'lucide-react';
 
 interface MiddleCanvasProps {
   components: PBLComponentData[];
@@ -12,23 +11,15 @@ interface MiddleCanvasProps {
   onNavigate: (category: ComponentCategory) => void;
   appMode: AppMode;
   setAppMode: (mode: AppMode) => void;
+  onSelectComponentForDetail: (id: string) => void;
 }
 
-// Updated FLOW_STEPS to use valid ComponentCategory values from types.ts
-const FLOW_STEPS: { id: ComponentCategory; label: string }[] = [
-  { id: 'dq-2.0', label: '驱动问题' },
-  { id: 'task-component', label: '核心任务' },
-  { id: 'scaffold-group', label: '支持活动' },
-  { id: 'custom-node', label: '支持工具' },
-  { id: 'assessment-class', label: '评价反思' },
-];
-
 export const MiddleCanvas: React.FC<MiddleCanvasProps> = ({ 
-  components, setComponents, connections, setConnections, onNavigate 
+  components, setComponents, connections, setConnections, onSelectComponentForDetail
 }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [draggedItem, setDraggedItem] = useState<{ id: string, startX: number, startY: number, initialLeft: number, initialTop: number } | null>(null);
-  const [linkingFrom, setLinkingFrom] = useState<string | null>(null);
+  const [linkingFrom, setLinkingFrom] = useState<{ id: string, port: 'in' | 'out', portIndex: number } | null>(null);
 
   const handleMouseDown = (e: React.MouseEvent, id: string) => {
     const component = components.find(c => c.id === id);
@@ -45,12 +36,76 @@ export const MiddleCanvas: React.FC<MiddleCanvasProps> = ({
 
   const handleMouseUp = () => setDraggedItem(null);
 
-  const onStartLink = (id: string) => setLinkingFrom(id);
-  const onEndLink = (id: string) => {
-    if (linkingFrom && linkingFrom !== id) {
-      const exists = connections.some(c => (c.from === linkingFrom && c.to === id) || (c.from === id && c.to === linkingFrom));
+  const getPortLabel = (compId: string, portType: 'in' | 'out', portIdx: number) => {
+    const comp = components.find(c => c.id === compId);
+    if (!comp) return '';
+    
+    const ports = { in: [] as string[], out: [] as string[] };
+    switch(comp.type) {
+      case 'dq-curriculum': 
+      case 'dq-resource': ports.out = ['驱动性问题']; break;
+      case 'dq-problem': 
+        ports.in = ['驱动性问题']; 
+        ports.out = ['情景导入', '目标解析', '设计流程']; 
+        break;
+      case 'dq-context': ports.in = ['驱动性问题']; break;
+      case 'dq-analysis': ports.in = ['目标解析']; break;
+      case 'task-edp': 
+        ports.in = ['设计流程']; 
+        ports.out = ['支持性活动', '支架']; 
+        break;
+      case 'task-support': ports.in = ['支持性活动']; break;
+      case 'scaffold-scamper':
+      case 'scaffold-persona':
+      case 'scaffold-empathy':
+      case 'scaffold-story':
+      case 'scaffold-material':
+        ports.in = ['支持性活动']; 
+        ports.out = ['评价'];
+        break;
+      case 'assess-rubric':
+        ports.in = ['评价'];
+        break;
+      default:
+        if (comp.hasInputs) ports.in = ['输入'];
+        if (comp.hasOutputs) ports.out = ['输出'];
+    }
+    return (portType === 'in' ? ports.in : ports.out)[portIdx] || '';
+  };
+
+  const onStartLink = (id: string, port: 'in' | 'out', portIndex: number) => setLinkingFrom({ id, port, portIndex });
+  
+  const onEndLink = (id: string, port: 'in' | 'out', portIndex: number) => {
+    if (linkingFrom && linkingFrom.id !== id && linkingFrom.port !== port) {
+      const fromId = linkingFrom.port === 'out' ? linkingFrom.id : id;
+      const fromPortIndex = linkingFrom.port === 'out' ? linkingFrom.portIndex : portIndex;
+      const toId = linkingFrom.port === 'in' ? linkingFrom.id : id;
+      const toPortIndex = linkingFrom.port === 'in' ? linkingFrom.portIndex : portIndex;
+
+      const fromLabel = getPortLabel(fromId, 'out', fromPortIndex);
+      const toLabel = getPortLabel(toId, 'in', toPortIndex);
+
+      if (fromLabel !== toLabel && fromLabel !== '输出' && toLabel !== '输入') {
+        alert(`连接失败：端口类型不匹配。 [${fromLabel}] 只能连接 [${fromLabel}]。`);
+        setLinkingFrom(null);
+        return;
+      }
+
+      const exists = connections.some(c => 
+        c.fromId === fromId && c.fromPortIndex === fromPortIndex && 
+        c.toId === toId && c.toPortIndex === toPortIndex
+      );
+
       if (!exists) {
-        setConnections(prev => [...prev, { id: Date.now().toString(), from: linkingFrom, to: id }]);
+        setConnections(prev => [...prev, { 
+          id: Date.now().toString(), 
+          fromId, 
+          fromPortIndex,
+          fromPortLabel: fromLabel,
+          toId, 
+          toPortIndex,
+          toPortLabel: toLabel
+        }]);
       }
     }
     setLinkingFrom(null);
@@ -66,49 +121,31 @@ export const MiddleCanvas: React.FC<MiddleCanvasProps> = ({
 
   const renderConnections = () => {
     return connections.map(conn => {
-      const from = componentMap.get(conn.from);
-      const to = componentMap.get(conn.to);
+      const from = componentMap.get(conn.fromId);
+      const to = componentMap.get(conn.toId);
       if (!from || !to) return null;
 
-      // Calculate anchor points (approximate center for simplicity)
-      const startX = from.x + 170; // Half width
-      const startY = from.y + 100; // Guess at height
-      const endX = to.x + 170;
-      const endY = to.y + 100;
+      const fromWidth = from.type.includes('edp') || from.type.includes('rubric') ? 380 : 280;
+      const sX = from.x + fromWidth;
+      const sY = from.y + 45 + 16 + (conn.fromPortIndex * 40) + 12; 
+      const eX = to.x;
+      const eY = to.y + 45 + 16 + (conn.toPortIndex * 40) + 12;
 
-      const midX = (startX + endX) / 2;
-      const path = `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`;
+      const midX = (sX + eX) / 2;
+      const path = `M ${sX} ${sY} C ${midX} ${sY}, ${midX} ${eY}, ${eX} ${eY}`;
 
       return (
         <g key={conn.id} className="group cursor-pointer" onClick={() => deleteConnection(conn.id)}>
-          <path d={path} fill="none" stroke="#1a1a1a" strokeWidth="6" strokeLinecap="round" className="opacity-0 group-hover:opacity-20" />
-          <path d={path} fill="none" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round" strokeDasharray="8,8" className="group-hover:stroke-red-500 group-hover:stroke-dasharray-none transition-all" />
-          <circle cx={startX} cy={startY} r="4" fill="#1a1a1a" />
-          <circle cx={endX} cy={endY} r="4" fill="#1a1a1a" />
+          <path d={path} fill="none" stroke="#1a1a1a" strokeWidth="6" strokeLinecap="round" className="opacity-0 group-hover:opacity-10 transition-all" />
+          <path d={path} fill="none" stroke="#1a1a1a" strokeWidth="2.5" strokeLinecap="round" className="group-hover:stroke-red-500 transition-all" />
+          <path d={path} fill="none" stroke="#4FC3F7" strokeWidth="1" strokeLinecap="round" className="opacity-30" />
         </g>
       );
     });
   };
 
   return (
-    <div className="h-full relative flex flex-col bg-doodle-bg overflow-hidden z-10 w-full">
-       <div className="h-20 bg-white border-b-3 border-doodle-black flex items-center justify-between px-6 z-20 shadow-sm shrink-0">
-          <div className="flex items-center space-x-1 bg-gray-100 p-2 rounded-xl border-2 border-doodle-black">
-             {FLOW_STEPS.map((step, idx) => {
-                const isActive = components.some(c => c.category === step.id);
-                return (
-                    <div key={step.id} className="flex items-center">
-                        <button onClick={() => onNavigate(step.id)} className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-black transition-all ${isActive ? 'bg-doodle-yellow text-doodle-black border-2 border-doodle-black shadow-pop-sm' : 'text-gray-400'}`}>
-                            {isActive ? <CheckCircle2 size={18} /> : <Circle size={18}/>}
-                            <span>{step.label}</span>
-                        </button>
-                        {idx < FLOW_STEPS.length - 1 && <div className="w-6 h-[3px] bg-gray-300 mx-1 rounded-full"></div>}
-                    </div>
-                );
-             })}
-          </div>
-       </div>
-
+    <div className="h-full relative flex flex-col bg-doodle-bg overflow-hidden z-10 w-full" onClick={() => setLinkingFrom(null)}>
        <div ref={canvasRef} className="flex-1 overflow-auto relative dot-pattern w-full" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
         <div className="min-w-full min-h-full w-[3000px] h-[3000px] relative p-10">
             <svg className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
@@ -124,8 +161,9 @@ export const MiddleCanvas: React.FC<MiddleCanvasProps> = ({
                 onMouseDown={handleMouseDown}
                 onStartLink={onStartLink}
                 onEndLink={onEndLink}
-                isLinking={linkingFrom === comp.id}
-                isLinkTarget={!!linkingFrom && linkingFrom !== comp.id}
+                isLinking={!!linkingFrom}
+                linkingFrom={linkingFrom}
+                onOpenDetail={() => onSelectComponentForDetail(comp.id)}
               />
             ))}
         </div>

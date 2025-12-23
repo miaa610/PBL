@@ -2,30 +2,25 @@
 import React from 'react';
 
 export type ComponentCategory = 
-  | 'dq-2.0'           // 驱动型问题 2.0
-  | 'task-component'   // 任务组件
-  | 'scaffold-group'   // 支架组
-  | 'assessment-class' // 评价类
-  | 'custom-node';     // 节点式/自定义
+  | 'dq-group'          // 驱动问题
+  | 'task-group'        // 项目任务
+  | 'scaffold-group'    // 支持性工具
+  | 'assess-group'      // 评价
+  | 'custom-node'
+  | 'my-library';
 
-export type InteractionType = 'parameter' | 'generative' | 'node';
-
-export type AppMode = 'design' | 'teach' | 'catalog';
+export type NodeType = 'source' | 'processor' | 'application';
+export type InteractionType = 'parameter' | 'generative' | 'visual-tool';
+export type AppMode = 'design' | 'teach' | 'reflect';
 
 export interface FieldData {
   id: string;
   label: string;
   value: string;
-  type: 'text' | 'textarea' | 'slider' | 'select' | 'toggle' | 'tags';
+  type: 'text' | 'textarea' | 'slider' | 'select' | 'radar-dim' | 'story-shot';
   options?: string[];
-  range?: [number, number];
+  weight?: number; 
   placeholder?: string;
-}
-
-export interface Connection {
-  id: string;
-  from: string;
-  to: string;
 }
 
 export interface PBLComponentData {
@@ -33,38 +28,69 @@ export interface PBLComponentData {
   x: number;
   y: number;
   category: ComponentCategory;
+  nodeType: NodeType;
   interactionType: InteractionType;
   title: string;
   type: string;
   fields: FieldData[];
-  result: string;
+  results: string[];
+  result?: string;
+  activeResultIndex: number;
+  pinnedResultIndex: number;
   isExpanded: boolean;
-  isRippleActive?: boolean;
-  stages?: EDPStage[];
-}
-
-export interface EDPStage {
-  id: string;
-  name: string;
-  attachments: { id: string, title: string, type: string }[];
-  constraints?: string[];
+  hasInputs: boolean;
+  hasOutputs: boolean;
+  stages?: { id: string; name: string; attachments: any[] }[];
 }
 
 export interface ResourceItem {
   id: string;
   title: string;
   type: string;
+  nodeType: NodeType;
   interactionType: InteractionType;
   icon: React.ReactNode;
   defaultFields: FieldData[];
-  stages?: EDPStage[];
+  hasInputs?: boolean;
+  hasOutputs?: boolean;
+  stages?: { id: string; name: string; attachments: any[] }[];
 }
 
 export interface ResourceCategory {
   id: ComponentCategory;
   title: string;
   colorClass: string;
-  items: ResourceItem[];
+  items?: ResourceItem[];
+  subCategories?: { title: string, items: ResourceItem[] }[];
+}
+
+export interface Connection { 
+  id: string; 
+  fromId: string; 
+  fromPortIndex: number;
+  fromPortLabel: string;
+  toId: string; 
+  toPortIndex: number;
+  toPortLabel: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  text: string;
+  suggestedAction?: {
+    label: string;
+    actionType: 'add-to-canvas';
+    data: Partial<PBLComponentData>;
+  };
+}
+
+export type IssueCategory = 'design' | 'cognitive' | 'collaboration' | 'technical';
+
+export interface AIControllers {
+  supportLevel: number;
+  strategy: number;
+  modality: number;
 }
 
 export interface GroupMessage {
@@ -73,6 +99,7 @@ export interface GroupMessage {
   text: string;
   timestamp: string;
   isTeacher?: boolean;
+  isAdHoc?: boolean;
 }
 
 export interface StudentGroup {
@@ -80,20 +107,12 @@ export interface StudentGroup {
   name: string;
   avatarColor: string;
   members: string[];
-  status: 'active' | 'idle' | 'stuck' | 'done';
+  status: 'active' | 'stuck' | 'idle';
   currentStageId: string;
   issue?: string;
-  issueType?: string;
+  issueType?: IssueCategory;
   messages: GroupMessage[];
 }
-
-export interface AIControllers {
-  supportLevel: number;
-  strategy: number;
-  modality: number;
-}
-
-export type IssueCategory = 'execution' | 'design';
 
 export interface AIChatItem {
   id: string;
@@ -104,13 +123,21 @@ export interface AIChatItem {
   contextContent?: string;
 }
 
-export interface ChatMessage {
+export interface TimelineEvent {
   id: string;
-  role: 'user' | 'model';
-  text: string;
-  suggestedAction?: {
-    label: string;
-    actionType: 'add-to-canvas';
-    data?: Partial<PBLComponentData>;
-  };
+  stageId: string;
+  plannedMinutes: number;
+  actualMinutes: number;
+  helpRequests: number;
+  aiDiagnosis?: string;
+}
+
+export interface GalleryItem {
+  id: string;
+  groupId: string;
+  groupName: string;
+  imageUrl: string;
+  description: string;
+  aiScore: number;
+  aiFeedback: string;
 }

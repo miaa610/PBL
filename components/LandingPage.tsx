@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { ArrowRight, Compass, Layout, Sparkles, Star, Rocket } from 'lucide-react';
+import { ArrowRight, Compass, Layout, Sparkles, Star, Rocket, Users, GraduationCap } from 'lucide-react';
 
 interface LandingPageProps {
   onStart: () => void;
@@ -34,13 +35,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
           像搭积木一样设计课程。结合 AI 智能辅助，将复杂的工程教育项目拆解为可视化的教学积木。
         </p>
 
-        <div className="flex justify-center gap-6">
+        <div className="flex flex-col sm:flex-row justify-center gap-6">
            <button 
              onClick={onStart}
-             className="group relative px-8 py-5 bg-doodle-yellow text-doodle-black text-xl font-black rounded-2xl hover:bg-yellow-300 border-3 border-doodle-black shadow-pop hover:shadow-pop-hover active:shadow-pop-active active:translate-y-1 transition-all flex items-center gap-3"
+             className="group relative px-8 py-4 bg-doodle-yellow text-doodle-black text-xl font-black rounded-2xl hover:bg-yellow-300 border-3 border-doodle-black shadow-pop hover:shadow-pop-hover active:shadow-pop-active active:translate-y-1 transition-all flex items-center justify-center gap-3"
            >
-             <Rocket size={28} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform"/>
-             开始创作
+             <GraduationCap size={28} className="group-hover:rotate-12 transition-transform"/>
+             教师端登录
+           </button>
+           <button 
+             onClick={() => alert('学生端功能开发中...')}
+             className="group relative px-8 py-4 bg-white text-doodle-black text-xl font-black rounded-2xl hover:bg-gray-50 border-3 border-doodle-black shadow-pop hover:shadow-pop-hover active:shadow-pop-active active:translate-y-1 transition-all flex items-center justify-center gap-3"
+           >
+             <Users size={28} className="group-hover:scale-110 transition-transform"/>
+             学生端登录
            </button>
         </div>
       </div>
